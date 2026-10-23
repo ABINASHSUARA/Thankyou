@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thank You Card Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kaushan+Script&family=Outfit:wght@400;500;600;700&family=Playfair+Display:wght@900&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #eef1ec; color: #1f2937; padding: 24px 16px; }
+  .wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 24px; grid-template-columns: 1fr; }
+  @media (min-width: 860px) { .wrap { grid-template-columns: 340px 1fr; align-items: start; } }
+  .panel { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06); }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .hint { font-size: 12px; color: #6b7280; margin: 0 0 8px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  input[type=text], input[type=number], select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 15px; font-family: inherit; }
+  textarea { resize: vertical; min-height: 90px; }
+  input[type=file] { font-size: 13px; }
+  details { display: none; margin-top: 18px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+  body.admin details { display: block; }
+  summary { cursor: pointer; font-size: 13px; font-weight: 600; color: #0f5a2e; }
+  button { margin-top: 20px; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: #0f5a2e; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #0b4a24; }
+  .preview { text-align: center; }
+  canvas { width: 100%; max-width: 560px; height: auto; border-radius: 6px; box-shadow: 0 4px 18px rgba(0,0,0,.18); background: #fff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>Thank You Card Generator</h1>
+    <p class="hint">Change the name and amount, then download the PNG.</p>
+
+    <label for="name">Donated by (name)</label>
+    <input type="text" id="name" value="Shubhashree Muni">
+
+    <label for="amount">Amount</label>
+    <input type="number" id="amount" value="500" min="0" step="any">
+
+    <button id="download">Download PNG</button>
+
+    <details>
+      <summary>Optional settings (logo, organization, message)</summary>
+
+      <label for="currency">Currency</label>
+      <select id="currency">
+        <option value="₹">₹ INR</option>
+        <option value="$">$ USD</option>
+        <option value="€">€ EUR</option>
+        <option value="£">£ GBP</option>
+      </select>
+
+      <label for="logo">Logo (your Youngsters logo is built in; upload only to replace it)</label>
+      <input type="file" id="logo" accept="image/*">
+
+      <label for="org">Organization name</label>
+      <input type="text" id="org" value="YOUNGSTERS SOCIAL GROUP">
+
+      <label for="tagline">Tagline (shown only if no logo)</label>
+      <input type="text" id="tagline" value="TOGETHER FOR A BETTER TOMORROW">
+
+      <label for="message">Message</label>
+      <textarea id="message">We are deeply grateful for your presence, generosity, and belief in our mission. Your contribution makes a meaningful impact and helps us continue the important work we do.</textarea>
+
+      <label for="closing">Closing line</label>
+      <input type="text" id="closing" value="Thank you for standing with us.">
+    </details>
+  </div>
+
+  <div class="preview">
+    <canvas id="card" width="1000" height="1250"></canvas>
+  </div>
+</div>
+
+<script>
+if (/[?&]admin/.test(location.search)) document.body.classList.add('admin');
+const canvas = document.getElementById("card");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+const $ = id => document.getElementById(id);
+const DEFAULT_LOGO = "logo.png";
+let logoImg = null;
+
+const DARK = "#0b4a24", GREEN = "#0f5a2e", INK = "#14301f";
+const SERIF = '"Playfair Display", Georgia, "Times New Roman", serif';
+const SCRIPT = '"Kaushan Script", "Brush Script MT", cursive';
+const SANS = 'Outfit, system-ui, "Segoe UI", Roboto, sans-serif';
+
+function setSpacing(px) { if ("letterSpacing" in ctx) ctx.letterSpacing = px + "px"; }
+
+function fitFont(text, maxW, start, weight, family) {
+  let s = start;
+  while (s > 14) {
+    ctx.font = `${weight} ${s}px ${family}`;
+    if (ctx.measureText(text).width <= maxW) break;
+    s -= 2;
+  }
+  return s;
+}
+
+function wrapCenter(text, x, y, maxW, lh) {
+  const words = text.split(/\s+/);
+  let line = "", lines = [];
+  for (const w of words) {
+    const t = line ? line + " " + w : w;
+    if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; }
+    else line = t;
+  }
+  if (line) lines.push(line);
+  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lh));
+  return y + (lines.length - 1) * lh;
+}
+
+function heart(x, y, s, color) {
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(s, s);
+  ctx.beginPath();
+  ctx.moveTo(0, 0.9);
+  ctx.bezierCurveTo(-1.3, 0, -0.8, -1, 0, -0.4);
+  ctx.bezierCurveTo(0.8, -1, 1.3, 0, 0, 0.9);
+  ctx.fillStyle = color; ctx.fill();
+  ctx.restore();
+}
+
+function leaf(len, w, fill) {
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(len * 0.5, -w, len, 0);
+  ctx.quadraticCurveTo(len * 0.5, w, 0, 0);
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,.45)"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(len * 0.08, 0); ctx.lineTo(len * 0.9, 0); ctx.stroke();
+}
+
+function sprig(scale) {
+  const cols = ["#1b6e36", "#2f9a4a", "#14532d", "#3aa655"];
+  ctx.save();
+  ctx.translate(62, 62);
+  ctx.scale(scale, scale);
+  ctx.rotate(Math.PI / 4);
+  ctx.strokeStyle = "#14532d"; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(100, 14, 200, 0); ctx.stroke();
+  for (let i = 0; i < 6; i++) {
+    const pos = 22 + i * 30, len = 66 - i * 3, w = 19 - i;
+    ctx.save(); ctx.translate(pos, 0); ctx.rotate(-0.9); leaf(len, w, cols[i % 4]); ctx.restore();
+    ctx.save(); ctx.translate(pos + 12, 2); ctx.rotate(0.9); leaf(len - 4, w, cols[(i + 2) % 4]); ctx.restore();
+  }
+  ctx.save(); ctx.translate(198, 0); leaf(58, 16, cols[0]); ctx.restore();
+  ctx.restore();
+  heart(62 + 118 * scale, 62 + 8 * scale, 8 * scale, GREEN);
+  ctx.fillStyle = GREEN;
+  ctx.beginPath(); ctx.arc(62 + 6 * scale, 62 + 112 * scale, 5 * scale, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(62 + 112 * scale, 62 + 2 * scale, 3 * scale, 0, 7); ctx.fill();
+}
+
+function corner(tx, ty, sx, sy, scale) {
+  ctx.save(); ctx.translate(tx, ty); ctx.scale(sx, sy); sprig(scale); ctx.restore();
+}
+
+function draw() {
+  setSpacing(0);
+
+  // background
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#f7fbf1"); bg.addColorStop(1, "#eef6e6");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  // double border
+  ctx.strokeStyle = GREEN;
+  ctx.lineWidth = 5; ctx.strokeRect(22, 22, W - 44, H - 44);
+  ctx.lineWidth = 2; ctx.strokeRect(36, 36, W - 72, H - 72);
+
+  // corner leaves
+  corner(0, 0, 1, 1, 0.95);
+  corner(W, 0, -1, 1, 0.95);
+  corner(0, H, 1, -1, 1.1);
+  corner(W, H, -1, -1, 1.1);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+
+  // logo or fallback org text
+  const org = $("org").value.trim();
+  if (logoImg) {
+    const bw = 430, bh = 252;
+    const r = Math.min(bw / logoImg.width, bh / logoImg.height);
+    const lw = logoImg.width * r, lh = logoImg.height * r;
+    ctx.drawImage(logoImg, (W - lw) / 2, 58 + (bh - lh) / 2, lw, lh);
+  } else {
+    ctx.fillStyle = "#1e2a8a";
+    fitFont(org, 620, 60, 700, SANS);
+    ctx.fillText(org, W / 2, 190);
+    fitFont($("tagline").value, 560, 20, 500, SANS);
+    ctx.fillText($("tagline").value, W / 2, 235);
+  }
+
+  // title (serif, heavy)
+  ctx.fillStyle = DARK;
+  const ts = fitFont("THANK YOU FOR", 700, 92, 900, SERIF);
+  ctx.font = `900 ${ts}px ${SERIF}`;
+  ctx.fillText("THANK YOU FOR", W / 2, 385);
+  ctx.fillText("YOUR SUPPORT", W / 2, 385 + ts * 0.98);
+
+  // divider with heart
+  const dvY = 385 + ts * 0.98 + 55;
+  ctx.strokeStyle = GREEN; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(290, dvY); ctx.lineTo(450, dvY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(550, dvY); ctx.lineTo(710, dvY); ctx.stroke();
+  heart(W / 2, dvY - 2, 21, DARK);
+
+  // message (sans)
+  ctx.fillStyle = INK;
+  ctx.font = `500 29px ${SANS}`;
+  const endY = wrapCenter($("message").value, W / 2, dvY + 70, 660, 37);
+  ctx.font = `500 29px ${SANS}`;
+  ctx.fillText($("closing").value, W / 2, endY + 62);
+
+  // donated by
+  const dy = 842;
+  ctx.fillStyle = INK;
+  ctx.font = `500 26px ${SANS}`;
+  setSpacing(2);
+  ctx.fillText("DONATED BY", W / 2, dy);
+  setSpacing(0);
+  ctx.strokeStyle = GREEN; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(320, dy - 9); ctx.lineTo(405, dy - 9); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(595, dy - 9); ctx.lineTo(680, dy - 9); ctx.stroke();
+
+  // brush shape behind name
+  ctx.save();
+  const cy = 905;
+  const rg = ctx.createRadialGradient(W / 2, cy, 40, W / 2, cy, 340);
+  rg.addColorStop(0, "rgba(190,226,165,.95)"); rg.addColorStop(1, "rgba(190,226,165,0)");
+  ctx.fillStyle = rg;
+  ctx.scale(1, 0.32);
+  ctx.beginPath(); ctx.arc(W / 2, cy / 0.32, 340, 0, 7); ctx.fill();
+  ctx.restore();
+
+  // name (script)
+  const name = $("name").value.trim() || "Name";
+  ctx.fillStyle = DARK;
+  fitFont(name, 600, 84, 400, SCRIPT);
+  ctx.fillText(name, W / 2, 925);
+
+  // amount pill
+  ctx.fillStyle = DARK;
+  ctx.beginPath();
+  ctx.roundRect(W / 2 - 150, 958, 300, 102, 51);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = `500 23px ${SANS}`;
+  setSpacing(2);
+  ctx.fillText("AMOUNT", W / 2, 990);
+  setSpacing(0);
+  const amt = parseFloat($("amount").value);
+  const amtText = $("currency").value + (isNaN(amt) ? "0" : amt.toLocaleString("en-IN"));
+  fitFont(amtText, 260, 58, 700, SANS);
+  ctx.fillText(amtText, W / 2, 1043);
+
+  // org label
+  ctx.fillStyle = INK;
+  ctx.font = `500 24px ${SANS}`;
+  setSpacing(2);
+  ctx.fillText("ORGANIZATION NAME", W / 2, 1112);
+  setSpacing(0);
+  fitFont(org, 560, 30, 700, SANS);
+  ctx.fillText(org, W / 2, 1150);
+}
+
+["name","amount","currency","org","tagline","message","closing"].forEach(id => {
+  $(id).addEventListener("input", draw);
+  $(id).addEventListener("change", draw);
+});
+
+$("logo").addEventListener("change", e => {
+  const f = e.target.files[0];
+  if (!f) { try { localStorage.removeItem("ty_logo"); } catch (_) {} const d = new Image(); d.onload = () => { logoImg = d; draw(); }; d.src = DEFAULT_LOGO; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => { logoImg = img; draw(); };
+    img.src = reader.result;
+    try { localStorage.setItem("ty_logo", reader.result); } catch (_) {}
+  };
+  reader.readAsDataURL(f);
+});
+
+// remember one-time setup values in this browser
+const SETUP = ["currency", "org", "tagline", "message", "closing"];
+try {
+  SETUP.forEach(id => { const v = localStorage.getItem("ty_" + id); if (v !== null) $(id).value = v; });
+  const saved = localStorage.getItem("ty_logo");
+  if (saved) { const im = new Image(); im.onload = () => { logoImg = im; draw(); }; im.src = saved; }
+} catch (_) {}
+if (!logoImg) { const d = new Image(); d.onload = () => { if (!logoImg) { logoImg = d; draw(); } }; d.src = DEFAULT_LOGO; }
+SETUP.forEach(id => $(id).addEventListener("input", () => {
+  try { localStorage.setItem("ty_" + id, $(id).value); } catch (_) {}
+}));
+
+$("download").addEventListener("click", () => {
+  const safe = ($("name").value.trim() || "card").replace(/[^a-z0-9]+/gi, "_");
+  canvas.toBlob(blob => {
+    const a = document.createElement("a");
+    a.download = `thank_you_${safe}.png`;
+    a.href = URL.createObjectURL(blob);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, "image/png");
+});
+
+draw();
+if (document.fonts && document.fonts.load) {
+  Promise.all([
+    document.fonts.load(`900 80px "Playfair Display"`),
+    document.fonts.load(`400 80px "Kaushan Script"`),
+    document.fonts.load(`500 24px Outfit`),
+    document.fonts.load(`700 24px Outfit`)
+  ]).then(draw).catch(draw);
+}
+</script>
+</body>
+</html>
